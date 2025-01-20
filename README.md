@@ -16,3 +16,8 @@ Canvas API는 주로 2D, WebGL은 주로 하드웨어 가속 2D 및 3D그래픽�
 Math.PI는 파이이며, canvas에서 각도는 기본적으로 라디안 단위로 사용됨
 
 -->
+
+# A Piece of Pie 🥧
+
+재미로 만들어보는 원형 시간표 만드는 페이지.<br>
+ChatGPT 4o버전에게 물어가며 만들어봅니다.

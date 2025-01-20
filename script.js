@@ -1,12 +1,21 @@
-const canvas = document.getElementById("canvas"); // index.html의 캔버스 요소 가져옴
+const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-const cX = canvas.width / 2; // X좌표 중앙값
-const cY = canvas.height / 2; // Y좌표 중앙값
-const radius = 350;
+const cX = canvas.width / 2;
+const cY = canvas.height / 2;
+const radius = 300;
 
-function clock() {
-  // 메인 원 그리기
+let isDragging = false;
+let startTick = null;
+let endTick = null;
+let colorId = 1;
+const grid = Array(48).fill(0);
+let backgroundCanvas;
+
+// 고정된 배경 레이어 그리기
+function drawBackground() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
   ctx.beginPath();
   ctx.arc(cX, cY, radius, 0, Math.PI * 2);
   ctx.fillStyle = "#ffffff";
@@ -16,43 +25,178 @@ function clock() {
   ctx.stroke();
   ctx.closePath();
 
-  // 눈금선, 시간 텍스트 등 그리기
-  for (let i = 0; i < 24; i++) {
-    const angle = (i / 24) * 2 * Math.PI - Math.PI / 2; // 각도 계산
-    // 위쪽부터 시작해야 하기 때문에 - Math.PI/2가 필요
+  for (let i = 0; i < 48; i++) {
+    const angle = (i / 48) * 2 * Math.PI - Math.PI / 2;
+    const length = i % 2 === 0 ? 20 : 10;
 
-    // 눈금선을 위한 좌표 계산
-    const x1 = cX + (radius - 20) * Math.cos(angle); // 안쪽 좌표
-    const y1 = cY + (radius - 20) * Math.sin(angle); // 안쪽 좌표
-    const x2 = cX + radius * Math.cos(angle); // 바깥쪽 좌표
-    const y2 = cY + radius * Math.sin(angle); // 바깥쪽 좌표
+    const x1 = cX + (radius - length) * Math.cos(angle);
+    const y1 = cY + (radius - length) * Math.sin(angle);
+    const x2 = cX + radius * Math.cos(angle);
+    const y2 = cY + radius * Math.sin(angle);
 
-    // 선 그리기
     ctx.beginPath();
-    ctx.moveTo(x1, y1); // 시작점(안쪽 좌표)
-    ctx.lineTo(x2, y2); // 끝점(바깥쪽 좌표)
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
     ctx.lineWidth = 2;
     ctx.strokeStyle = "black";
     ctx.stroke();
     ctx.closePath();
 
-    // 시간 텍스트
-    const tX = cX + (radius + 30) * Math.cos(angle);
-    const tY = cY + (radius + 30) * Math.sin(angle);
-    ctx.font = "28px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "black";
+    if (i % 2 === 0) {
+      const num = i / 2 === 0 ? 24 : i / 2;
+      const tX = cX + (radius + 20) * Math.cos(angle);
+      const tY = cY + (radius + 20) * Math.sin(angle);
 
-    // 0은 24로 표기하기 위함
-    const num = i === 0 ? 24 : i;
+      ctx.font = "23px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "black";
+      ctx.fillText(num.toString(), tX, tY);
+    }
+  }
 
-    // 텍스트 렌더링
-    ctx.fillText(num.toString(), tX, tY);
+  backgroundCanvas = ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
 
-    // 중간 점 임시 표기
-    ctx.fillText("🥧", cX, cY);
+// 색칠된 구간만 그리기
+function drawSections() {
+  ctx.putImageData(backgroundCanvas, 0, 0);
+
+  for (let i = 0; i < grid.length; i++) {
+    if (grid[i] !== 0) {
+      fillSection(i, i + 1, grid[i]);
+    }
   }
 }
 
-clock();
+// 특정 구간 색칠 함수
+function fillSection(start, end, colorId) {
+  const startAngle = (start / 48) * 2 * Math.PI - Math.PI / 2;
+  const endAngle = (end / 48) * 2 * Math.PI - Math.PI / 2;
+
+  ctx.beginPath();
+  ctx.moveTo(cX, cY);
+  ctx.arc(cX, cY, radius, startAngle, endAngle);
+  ctx.closePath();
+  ctx.fillStyle = `rgba(100, ${100 + colorId * 20}, 237, 0.5)`;
+  ctx.fill();
+}
+
+// 각도에서 눈금 계산
+function getTickFromAngle(x, y) {
+  const dx = x - cX;
+  const dy = y - cY;
+  let angle = Math.atan2(dy, dx) + Math.PI / 2;
+  if (angle < 0) angle += 2 * Math.PI;
+  return Math.round((angle / (2 * Math.PI)) * 48) % 48;
+}
+
+// 마우스 이벤트 처리
+canvas.addEventListener("mousedown", (e) => {
+  if (e.button === 2) return;
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+
+  startTick = getTickFromAngle(mouseX, mouseY);
+  isDragging = true;
+});
+
+canvas.addEventListener("mousemove", (e) => {
+  if (!isDragging) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+
+  endTick = getTickFromAngle(mouseX, mouseY);
+
+  drawSections(); // 기존 구간 다시 그리기
+
+  if (startTick !== null && endTick !== null) {
+    if (startTick === endTick) {
+      // 360도 드래그 미리보기
+      fillSection(0, 48, colorId);
+    } else if (startTick > endTick) {
+      // 반시계 방향 드래그 미리보기
+      fillSection(startTick, 48, colorId); // 첫 번째 구간
+      fillSection(0, endTick, colorId); // 두 번째 구간
+    } else {
+      // 일반적인 경우 (시계 방향)
+      fillSection(startTick, endTick, colorId);
+    }
+  }
+});
+
+canvas.addEventListener("mouseup", () => {
+  if (!isDragging) return;
+
+  isDragging = false;
+
+  if (startTick !== null && endTick !== null) {
+    if (startTick === endTick) {
+      // 360도 드래그 처리
+      const canFill = grid.every((tick) => tick === 0);
+      if (canFill) {
+        grid.fill(colorId); // 원 전체 색칠
+        colorId++;
+      } else {
+        alert("구간이 겹칩니다!");
+      }
+    } else if (startTick > endTick) {
+      // 반시계 방향 드래그
+      const canFillFirstPart = grid
+        .slice(startTick, 48)
+        .every((tick) => tick === 0);
+      const canFillSecondPart = grid
+        .slice(0, endTick)
+        .every((tick) => tick === 0);
+
+      if (canFillFirstPart && canFillSecondPart) {
+        grid.fill(colorId, startTick, 48); // 첫 번째 구간
+        grid.fill(colorId, 0, endTick); // 두 번째 구간
+        colorId++;
+      } else {
+        alert("구간이 겹칩니다!");
+      }
+    } else {
+      // 일반적인 경우 (시계 방향)
+      const canFill = grid
+        .slice(startTick, endTick)
+        .every((tick) => tick === 0);
+      if (canFill) {
+        grid.fill(colorId, startTick, endTick); // 구간 색칠
+        colorId++;
+      } else {
+        alert("구간이 겹칩니다!");
+      }
+    }
+  }
+
+  drawSections(); // 기존 구간 다시 그리기
+  startTick = null;
+  endTick = null;
+});
+
+// 우클릭으로 구간 삭제
+canvas.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+
+  const tick = getTickFromAngle(mouseX, mouseY);
+  const colorToDelete = grid[tick];
+
+  if (colorToDelete !== 0) {
+    grid.forEach((value, index) => {
+      if (value === colorToDelete) grid[index] = 0;
+    });
+    drawSections();
+  }
+});
+
+// 초기 배경 및 시계 그리기
+drawBackground();
+drawSections();
